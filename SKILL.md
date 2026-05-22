@@ -18,7 +18,8 @@ author:
 
 > 基于「四真三化(FT)」课程开发方法论
 > 参考教材：曹勇安《"四真三化"课程开发原理与方法》
-> 空白模板：`空白模板_开课说明.md` 和 `模板_教学大纲.md`
+> 空白模板：`template_course_description.md` 和 `template_syllabus.md`
+> 格式规范：`formatting_standards.md`（⚠️ 生成前必读） 和 `模板_教学大纲.md`
 > 格式规范：`格式规范_踩坑记录.md`（⚠️ 生成前必读）
 
 ## 核心理念

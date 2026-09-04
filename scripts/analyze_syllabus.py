@@ -307,9 +307,99 @@ def structure_report(path):
     print('=' * 70)
 
 
+def banned_scan(path, banned_terms):
+    """【8】废弃口径反向扫描：全文（段落+表格）查找禁用词/旧口径，0 命中才算过。
+    调优/改版时把本期废弃口径（旧占比/旧机制/旧叫法等）经 --banned 传入。"""
+    doc = docx.Document(path)
+    hits = []
+    for pi, para in enumerate(doc.paragraphs):
+        for w in banned_terms:
+            if w and w in para.text:
+                hits.append((f'段落P{pi}', w))
+    for ti, table in enumerate(doc.tables):
+        for ri, row in enumerate(table.rows):
+            seen = set()
+            for ci, cell in enumerate(row.cells):
+                if id(cell._tc) in seen:
+                    continue
+                seen.add(id(cell._tc))
+                for w in banned_terms:
+                    if w and w in cell.text:
+                        hits.append((f'表{ti} R{ri}C{ci}', w))
+    print('\n【8】废弃口径反向扫描 (banned)')
+    if not banned_terms:
+        print('  (未提供 --banned 词，跳过；调优/改版时把本期废弃口径列入，0 命中才算过)')
+        return
+    if not hits:
+        print('  ✓ 0 命中，通过')
+    else:
+        shown = set()
+        for loc, w in hits:
+            key = (loc, w)
+            if key in shown:
+                continue
+            shown.add(key)
+            print(f'  ⚠ 命中"{w}" @ {loc}')
+            if len(shown) >= 40:
+                break
+        if len(shown) < len(hits):
+            print(f'  … 共 {len(hits)} 处命中，以上前 {len(shown)} 处')
+        print('  ✗ 未通过：请逐处修正后再交付')
+
+
+def term_group_scan(path, term_groups):
+    """【9】同义词组/同物异名检测：--term-groups "A=B;C=D" 检查疑似异名并存。"""
+    print('\n【9】同义词组/同物异名检测 (term-groups)')
+    if not term_groups:
+        print('  (未提供 --term-groups，跳过；疑似异名可指定 A=B 检测)')
+        return
+    doc = docx.Document(path)
+    texts = [p.text for p in doc.paragraphs]
+    for table in doc.tables:
+        for row in table.rows:
+            seen = set()
+            for cell in row.cells:
+                if id(cell._tc) in seen:
+                    continue
+                seen.add(id(cell._tc))
+                texts.append(cell.text)
+    body = '\n'.join(texts)
+    for g in term_groups:
+        a, _, b = g.partition('=')
+        if not a or not b:
+            print(f'  ⚠ 无法解析分组: "{g}"（格式 A=B）')
+            continue
+        ca, cb = body.count(a), body.count(b)
+        if ca and cb:
+            print(f'  ⚠ 疑似同物异名: "{a}"×{ca} 与 "{b}"×{cb} 同时出现，请确认是否统一为一种')
+        else:
+            print(f'  ✓ "{a}"×{ca} / "{b}"×{cb}')
+
+
 if __name__ == '__main__':
-    if len(sys.argv) < 2:
+    args = sys.argv[1:]
+    if not args:
         print(__doc__)
         sys.exit(1)
-    analyze(sys.argv[1])
-    structure_report(sys.argv[1])
+    path = None
+    banned = []
+    groups = []
+    i = 0
+    while i < len(args):
+        a = args[i]
+        if a in ('--banned', '-b') and i + 1 < len(args):
+            banned = [x.strip() for x in args[i + 1].split(',') if x.strip()]
+            i += 2
+        elif a in ('--term-groups', '-t') and i + 1 < len(args):
+            groups = [x.strip() for x in args[i + 1].split(';') if x.strip()]
+            i += 2
+        else:
+            path = a
+            i += 1
+    if not path:
+        print(__doc__)
+        sys.exit(1)
+    analyze(path)
+    structure_report(path)
+    banned_scan(path, banned)
+    term_group_scan(path, groups)
